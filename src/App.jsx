@@ -43,7 +43,7 @@ function App() {
           <div className="brand-icon">⚙</div>
           <div>
             <h2>MaintainalUI</h2>
-            <span>Facilities Management</span>
+            <span>Equipment Maintenance System</span>
           </div>
         </div>
 
@@ -79,8 +79,9 @@ function App() {
         </div>
       </aside>
 
-      <main className="main-content">
-        <header className="topbar">
+
+<main className="main-content">
+  <header className="topbar">
           <div className="breadcrumb">
             <span>Workspace</span>
             <span className="breadcrumb-divider">/</span>

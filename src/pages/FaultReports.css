@@ -113,9 +113,8 @@
 .fault-form textarea:focus,
 .fault-toolbar input:focus,
 .fault-table select:focus {
-  border-color: #2867e8;
-  box-shadow: 0 0 0 3px #2867e81c;
-}
+  border-color: #E85D00;
+box-shadow: 0 0 0 3px #e85d001c;}
 
 .fault-description-field,
 .fault-form-actions {
@@ -191,7 +190,7 @@
 }
 
 .fault-id {
-  color: #2867e8 !important;
+  color: #E85D00 !important;
   font-weight: 700;
 }
 
@@ -244,7 +243,7 @@
 
 .status-pending {
   background: #edf3ff;
-  color: #2867e8;
+  color: #E85D00;
 }
 
 .status-under-investigation {

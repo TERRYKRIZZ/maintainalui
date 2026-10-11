@@ -49,10 +49,12 @@
   font-size: 11px;
 }
 
+
 .maintenance-summary strong {
-  color: #172640;
+  color: #E85D00;
   font-size: 28px;
 }
+
 
 .maintenance-form {
   display: grid;
@@ -100,9 +102,8 @@
 .maintenance-form input:focus,
 .maintenance-form select:focus,
 .maintenance-toolbar input:focus {
-  border-color: #2867e8;
-  box-shadow: 0 0 0 3px #2867e81c;
-}
+  border-color: #E85D00;
+box-shadow: 0 0 0 3px #e85d001c;}
 
 .maintenance-form-actions {
   grid-column: 1 / -1;
@@ -178,7 +179,7 @@
 
 .maintenance-status-scheduled {
   background: #edf3ff;
-  color: #2867e8;
+  color: #E85D00;
 }
 
 .maintenance-status-progress {

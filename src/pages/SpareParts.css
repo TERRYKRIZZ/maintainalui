@@ -99,7 +99,7 @@
 .spare-part-form input:focus,
 .spare-part-form select:focus,
 .spare-parts-toolbar input:focus {
-  border-color: #2867e8;
+  border-color: #E85D00;
   box-shadow: 0 0 0 3px #2867e81c;
 }
 
@@ -174,7 +174,7 @@
 }
 
 .spare-part-id {
-  color: #2867e8 !important;
+  color: #E85D00 !important;
   font-weight: 700;
 }
 
@@ -212,7 +212,7 @@
   border: 1px solid #dce5f5;
   border-radius: 8px;
   background: #f3f7ff;
-  color: #2867e8;
+  color: #E85D00;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;

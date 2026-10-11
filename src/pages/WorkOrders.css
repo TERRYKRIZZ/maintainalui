@@ -113,9 +113,8 @@
 .work-order-form textarea:focus,
 .work-orders-toolbar input:focus,
 .work-orders-table select:focus {
-  border-color: #2867e8;
-  box-shadow: 0 0 0 3px #2867e81c;
-}
+  border-color: #E85D00;
+box-shadow: 0 0 0 3px #e85d001c;}
 
 .work-order-issue-field,
 .work-order-form-actions {
@@ -191,7 +190,7 @@
 }
 
 .work-order-id {
-  color: #2867e8 !important;
+  color: #E85D00 !important;
   font-weight: 700;
 }
 
@@ -233,7 +232,7 @@
 
 .priority-medium {
   background: #edf3ff;
-  color: #2867e8;
+  color: #E85D00;
 }
 
 .priority-high,
@@ -244,7 +243,7 @@
 
 .status-open {
   background: #edf3ff;
-  color: #2867e8;
+  color: #E85D00;
 }
 
 .status-in-progress {

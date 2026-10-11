@@ -125,3 +125,9 @@
     padding: 12px;
   }
 }
+
+.history-notice {
+  background: #fff3e8;
+  border: 1px solid #ffd2b3;
+  color: #b84900;
+}
