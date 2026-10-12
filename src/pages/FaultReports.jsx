@@ -1,6 +1,8 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 import "./FaultReports.css";
+
 
 const initialFaults = [
   {
@@ -34,6 +36,52 @@ const initialFaults = [
 
 function FaultReports() {
   const [faults, setFaults] = useState(initialFaults);
+  
+useEffect(() => {
+  async function loadFaults() {
+    const { data: faultRows, error: faultError } = await supabase
+      .from("fault_reports")
+      .select("*")
+      .order("reported_at", { ascending: false });
+
+    if (faultError) {
+      console.error("Failed to load fault reports:", faultError.message);
+      return;
+    }
+
+    const { data: equipmentRows, error: equipmentError } = await supabase
+      .from("equipment")
+      .select("id, name, location");
+
+    if (equipmentError) {
+      console.error("Failed to load equipment:", equipmentError.message);
+      return;
+    }
+
+    const equipmentById = new Map(
+      equipmentRows.map((item) => [item.id, item])
+    );
+
+    const savedFaults = faultRows.map((item) => {
+      const linkedEquipment = equipmentById.get(item.equipment_id);
+
+      return {
+        id: item.id,
+        equipment: linkedEquipment?.name || item.title,
+        location: linkedEquipment?.location || "",
+        description: item.description,
+        severity: item.priority,
+        status: item.status === "Open" ? "Pending" : item.status,
+        reportedDate: item.reported_at.slice(0, 10),
+      };
+    });
+
+    setFaults(savedFaults);
+  }
+
+  loadFaults();
+}, []);
+
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
 
@@ -50,35 +98,99 @@ function FaultReports() {
       .includes(search.toLowerCase())
   );
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
+  
+const handleSubmit = async (event) => {
+  event.preventDefault();
 
-    const newFault = {
-      ...form,
-      id: `FR-${String(faults.length + 1).padStart(3, "0")}`,
-      status: "Pending",
-      reportedDate: new Date().toISOString().slice(0, 10),
-    };
+  const equipmentName = form.equipment.trim();
 
-    setFaults((current) => [...current, newFault]);
+  if (!equipmentName || !form.location.trim() || !form.description.trim()) {
+    alert("Please complete all required fields.");
+    return;
+  }
 
-    setForm({
-      equipment: "",
-      location: "",
-      description: "",
-      severity: "Medium",
-    });
+  // Find the equipment record in Supabase.
+  const { data: equipmentRecord, error: equipmentError } = await supabase
+    .from("equipment")
+    .select("id, name, location")
+    .eq("name", equipmentName)
+    .maybeSingle();
 
-    setShowForm(false);
-  };
+  if (equipmentError) {
+    alert("Could not find equipment: " + equipmentError.message);
+    return;
+  }
 
-  const updateStatus = (id, status) => {
-    setFaults((current) =>
-      current.map((fault) =>
-        fault.id === id ? { ...fault, status } : fault
-      )
+  if (!equipmentRecord) {
+    alert(
+      `Equipment "${equipmentName}" is not registered in the database. ` +
+      "Please register the equipment first and use its exact name."
     );
+    return;
+  }
+
+  // Save the fault report in Supabase.
+  const { data, error } = await supabase
+    .from("fault_reports")
+    .insert({
+      equipment_id: equipmentRecord.id,
+      title: `${equipmentName} fault report`,
+      description: form.description.trim(),
+      priority: form.severity,
+      status: "Open",
+    })
+    .select()
+    .single();
+
+  if (error) {
+    alert("Could not save fault report: " + error.message);
+    return;
+  }
+
+  const newFault = {
+    id: data.id,
+    equipment: equipmentRecord.name,
+    location: equipmentRecord.location || form.location.trim(),
+    description: data.description,
+    severity: data.priority,
+    status: data.status === "Open" ? "Pending" : data.status,
+    reportedDate: data.reported_at.slice(0, 10),
   };
+
+  setFaults((current) => [newFault, ...current]);
+
+  setForm({
+    equipment: "",
+    location: "",
+    description: "",
+    severity: "Medium",
+  });
+
+  setShowForm(false);
+};
+
+
+  
+const updateStatus = async (id, status) => {
+  const databaseStatus = status === "Pending" ? "Open" : status;
+
+  const { error } = await supabase
+    .from("fault_reports")
+    .update({ status: databaseStatus })
+    .eq("id", id);
+
+  if (error) {
+    alert("Could not update fault status: " + error.message);
+    return;
+  }
+
+  setFaults((current) =>
+    current.map((fault) =>
+      fault.id === id ? { ...fault, status } : fault
+    )
+  );
+};
+
 
   return (
     <section className="fault-page">

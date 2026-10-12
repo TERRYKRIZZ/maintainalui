@@ -1,6 +1,8 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 import "./Equipment.css";
+
 
 const startingEquipment = [
   {
@@ -31,6 +33,34 @@ const startingEquipment = [
 
 function Equipment() {
   const [equipment, setEquipment] = useState(startingEquipment);
+  
+  useEffect(() => {
+    async function loadEquipment() {
+      const { data, error } = await supabase
+        .from("equipment")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Failed to load equipment:", error.message);
+        return;
+      }
+
+      setEquipment(
+        data.map((item) => ({
+          id: item.id,
+          assetId: item.asset_tag,
+          name: item.name,
+          category: item.category || "",
+          location: item.location || "",
+          condition: item.status,
+        }))
+      );
+    }
+
+    loadEquipment();
+  }, []);
+
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -51,12 +81,35 @@ function Equipment() {
     );
   });
 
-  const handleSubmit = (event) => {
+  
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
+    const { data, error } = await supabase
+      .from("equipment")
+      .insert({
+        asset_tag: form.assetId.trim(),
+        name: form.name.trim(),
+        category: form.category || null,
+        location: form.location || null,
+        status: form.condition,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Failed to save equipment:", error.message);
+      alert(`Could not save equipment: ${error.message}`);
+      return;
+    }
+
     const newEquipment = {
-      ...form,
-      id: Date.now(),
+      id: data.id,
+      assetId: data.asset_tag,
+      name: data.name,
+      category: data.category || "",
+      location: data.location || "",
+      condition: data.status,
     };
 
     setEquipment((current) => [...current, newEquipment]);
@@ -71,6 +124,7 @@ function Equipment() {
 
     setShowForm(false);
   };
+
 
   return (
     <section className="equipment-page">

@@ -1,6 +1,8 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 import "./WorkOrders.css";
+
 
 const initialWorkOrders = [
   {
@@ -37,6 +39,53 @@ const initialWorkOrders = [
 
 function WorkOrders() {
   const [workOrders, setWorkOrders] = useState(initialWorkOrders);
+  
+useEffect(() => {
+  async function loadWorkOrders() {
+    const { data: orderRows, error: orderError } = await supabase
+      .from("work_orders")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (orderError) {
+      console.error("Failed to load work orders:", orderError.message);
+      return;
+    }
+
+    const { data: equipmentRows, error: equipmentError } = await supabase
+      .from("equipment")
+      .select("id, name, location");
+
+    if (equipmentError) {
+      console.error("Failed to load equipment:", equipmentError.message);
+      return;
+    }
+
+    const equipmentById = new Map(
+      equipmentRows.map((item) => [item.id, item])
+    );
+
+    const savedOrders = orderRows.map((item) => {
+      const linkedEquipment = equipmentById.get(item.equipment_id);
+
+      return {
+        id: item.work_order_code || item.id,
+        equipment: linkedEquipment?.name || item.title,
+        location: item.location || linkedEquipment?.location || "",
+        issue: item.description || item.title,
+        technician: item.assigned_to || "",
+        priority: item.priority,
+        status: item.status,
+        date: item.scheduled_date || item.created_at.slice(0, 10),
+      };
+    });
+
+    setWorkOrders(savedOrders);
+  }
+
+  loadWorkOrders();
+}, []);
+
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
 
@@ -54,42 +103,116 @@ function WorkOrders() {
       .includes(search.toLowerCase())
   );
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
+  
+const handleSubmit = async (event) => {
+  event.preventDefault();
 
-    const nextNumber =
-      Math.max(
-        1048,
-        ...workOrders.map((order) => Number(order.id.replace("WO-", "")))
-      ) + 1;
+  const equipmentName = form.equipment.trim();
 
-    const newOrder = {
-      ...form,
-      id: `WO-${nextNumber}`,
-      status: "Open",
-      date: new Date().toISOString().slice(0, 10),
-    };
+  if (
+    !equipmentName ||
+    !form.location.trim() ||
+    !form.technician.trim() ||
+    !form.issue.trim()
+  ) {
+    alert("Please complete all required fields.");
+    return;
+  }
 
-    setWorkOrders((current) => [...current, newOrder]);
+  // Find the equipment in Supabase.
+  const { data: equipmentRecord, error: equipmentError } = await supabase
+    .from("equipment")
+    .select("id, name, location")
+    .eq("name", equipmentName)
+    .maybeSingle();
 
-    setForm({
-      equipment: "",
-      location: "",
-      issue: "",
-      technician: "",
-      priority: "Medium",
-    });
+  if (equipmentError) {
+    alert("Could not find equipment: " + equipmentError.message);
+    return;
+  }
 
-    setShowForm(false);
-  };
-
-  const updateStatus = (id, status) => {
-    setWorkOrders((current) =>
-      current.map((order) =>
-        order.id === id ? { ...order, status } : order
-      )
+  if (!equipmentRecord) {
+    alert(
+      `Equipment "${equipmentName}" is not registered in the database. ` +
+      "Please use the exact name of registered equipment."
     );
+    return;
+  }
+
+  // Generate the next work-order number for this page.
+  const existingNumbers = workOrders
+    .map((order) => String(order.id).match(/^WO-(\d+)$/))
+    .filter(Boolean)
+    .map((match) => Number(match[1]));
+
+  const nextNumber = Math.max(1048, ...existingNumbers) + 1;
+  const workOrderCode = `WO-${nextNumber}`;
+
+  // Save the work order to Supabase.
+  const { data, error } = await supabase
+    .from("work_orders")
+    .insert({
+      work_order_code: workOrderCode,
+      equipment_id: equipmentRecord.id,
+      title: form.issue.trim(),
+      description: form.issue.trim(),
+      priority: form.priority,
+      status: "Open",
+      assigned_to: form.technician.trim(),
+      location: form.location.trim(),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    alert("Could not save work order: " + error.message);
+    return;
+  }
+
+  const newOrder = {
+    id: data.work_order_code,
+    equipment: equipmentRecord.name,
+    location: data.location || equipmentRecord.location || "",
+    issue: data.description || data.title,
+    technician: data.assigned_to || "",
+    priority: data.priority,
+    status: data.status,
+    date: data.scheduled_date || data.created_at.slice(0, 10),
   };
+
+  setWorkOrders((current) => [...current, newOrder]);
+
+  setForm({
+    equipment: "",
+    location: "",
+    issue: "",
+    technician: "",
+    priority: "Medium",
+  });
+
+  setShowForm(false);
+};
+
+
+  
+const updateStatus = async (id, status) => {
+  const { error } = await supabase
+    .from("work_orders")
+    .update({ status })
+    .eq("work_order_code", id);
+
+  if (error) {
+    alert("Could not update work order status: " + error.message);
+    return;
+  }
+
+  setWorkOrders((current) =>
+    current.map((order) =>
+      order.id === id ? { ...order, status } : order
+    )
+  );
+};
+
 
   const openCount = workOrders.filter(
     (order) => order.status === "Open"

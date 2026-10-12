@@ -1,67 +1,56 @@
 import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
 import "./SpareParts.css";
 
-const initialParts = [
-  {
-    id: "SP-001",
-    name: "Electrical Cable",
-    category: "Electrical",
-    quantity: 25,
-    unit: "metres",
-    minimum: 10,
-    location: "Maintenance Store",
-  },
-  {
-    id: "SP-002",
-    name: "Air Filter",
-    category: "HVAC",
-    quantity: 4,
-    unit: "pieces",
-    minimum: 8,
-    location: "Maintenance Store",
-  },
-  {
-    id: "SP-003",
-    name: "Water Pump Seal",
-    category: "Plumbing",
-    quantity: 12,
-    unit: "pieces",
-    minimum: 5,
-    location: "Store Room B",
-  },
-  {
-    id: "SP-004",
-    name: "Electrical Fuse",
-    category: "Electrical",
-    quantity: 3,
-    unit: "pieces",
-    minimum: 10,
-    location: "Maintenance Store",
-  },
-];
-
 function SpareParts() {
-  const [parts, setParts] = useState(() => {
-  const savedParts = localStorage.getItem("maintainalUI_spareParts");
-
-  return savedParts ? JSON.parse(savedParts) : initialParts;
-});
+  const [parts, setParts] = useState([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
-useEffect(() => {
-  localStorage.setItem(
-    "maintainalUI_spareParts",
-    JSON.stringify(parts)
-  );
-}, [parts]);
   const [form, setForm] = useState({
     name: "",
-    category: "Electrical", 
+    category: "Electrical",
     quantity: "",
     unit: "pieces",
     minimum: "",
     location: "",
   });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadParts() {
+      const { data, error } = await supabase
+        .from("spare_parts")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.error("Failed to load spare parts:", error.message);
+        setParts([]);
+        return;
+      }
+
+      const savedParts = (data || []).map((item) => ({
+        id: item.part_number,
+        name: item.name,
+        category: item.category || "General",
+        quantity: Number(item.quantity),
+        unit: item.unit || "pieces",
+        minimum: Number(item.reorder_level),
+        location: item.location || "",
+      }));
+
+      setParts(savedParts);
+    }
+
+    loadParts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const lowStockCount = parts.filter(
     (part) => part.quantity <= part.minimum
@@ -78,24 +67,64 @@ useEffect(() => {
       .includes(search.toLowerCase())
   );
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const nextNumber =
-      Math.max(
-        0,
-        ...parts.map((part) => Number(part.id.replace("SP-", "")))
-      ) + 1;
+    const quantity = Number(form.quantity);
+    const minimum = Number(form.minimum);
+
+    if (
+      !form.name.trim() ||
+      !form.location.trim() ||
+      !Number.isInteger(quantity) ||
+      quantity < 0 ||
+      !Number.isInteger(minimum) ||
+      minimum < 0
+    ) {
+      window.alert(
+        "Enter a part name and location, and use whole numbers of zero or more for quantity and minimum stock."
+      );
+      return;
+    }
+
+    const existingNumbers = parts
+      .map((part) => String(part.id).match(/^SP-(\d+)$/))
+      .filter(Boolean)
+      .map((match) => Number(match[1]));
+    const nextNumber = Math.max(0, ...existingNumbers) + 1;
+    const partNumber = `SP-${String(nextNumber).padStart(3, "0")}`;
+
+    const { data, error } = await supabase
+      .from("spare_parts")
+      .insert({
+        part_number: partNumber,
+        name: form.name.trim(),
+        category: form.category,
+        quantity,
+        unit: form.unit,
+        reorder_level: minimum,
+        location: form.location.trim(),
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("Failed to save spare part:", error.message);
+      window.alert(`Could not save spare part: ${error.message}`);
+      return;
+    }
 
     const newPart = {
-      ...form,
-      id: `SP-${String(nextNumber).padStart(3, "0")}`,
-      quantity: Number(form.quantity),
-      minimum: Number(form.minimum),
+      id: data.part_number,
+      name: data.name,
+      category: data.category || "General",
+      quantity: Number(data.quantity),
+      unit: data.unit || "pieces",
+      minimum: Number(data.reorder_level),
+      location: data.location || "",
     };
 
-    setParts((current) => [...current, newPart]);
-
+    setParts((current) => [newPart, ...current]);
     setForm({
       name: "",
       category: "Electrical",
@@ -104,11 +133,10 @@ useEffect(() => {
       minimum: "",
       location: "",
     });
-
     setShowForm(false);
   };
 
-  const updateQuantity = (id) => {
+  const updateQuantity = async (id) => {
     const part = parts.find((item) => item.id === id);
     if (!part) return;
 
@@ -121,16 +149,27 @@ useEffect(() => {
 
     const newQuantity = Number(value);
 
-    if (!Number.isFinite(newQuantity) || newQuantity < 0) {
-      window.alert("Please enter a valid quantity of zero or more.");
+    if (!Number.isInteger(newQuantity) || newQuantity < 0) {
+      window.alert("Please enter a whole-number quantity of zero or more.");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("spare_parts")
+      .update({ quantity: newQuantity })
+      .eq("part_number", id)
+      .select("part_number, quantity")
+      .single();
+
+    if (error) {
+      console.error("Failed to update spare-part quantity:", error.message);
+      window.alert(`Could not update stock: ${error.message}`);
       return;
     }
 
     setParts((current) =>
       current.map((item) =>
-        item.id === id
-          ? { ...item, quantity: newQuantity }
-          : item
+        item.id === id ? { ...item, quantity: Number(data.quantity) } : item
       )
     );
   };
@@ -172,9 +211,7 @@ useEffect(() => {
 
         <article>
           <span>Out of Stock</span>
-          <strong>
-            {parts.filter((part) => part.quantity === 0).length}
-          </strong>
+          <strong>{parts.filter((part) => part.quantity === 0).length}</strong>
         </article>
       </div>
 
@@ -216,7 +253,7 @@ useEffect(() => {
               required
               type="number"
               min="0"
-              step="any"
+              step="1"
               value={form.quantity}
               onChange={(event) =>
                 setForm({ ...form, quantity: event.target.value })
@@ -247,7 +284,7 @@ useEffect(() => {
               required
               type="number"
               min="0"
-              step="any"
+              step="1"
               value={form.minimum}
               onChange={(event) =>
                 setForm({ ...form, minimum: event.target.value })
@@ -317,39 +354,32 @@ useEffect(() => {
               return (
                 <tr key={part.id}>
                   <td className="spare-part-id">{part.id}</td>
-
                   <td className="spare-part-name">{part.name}</td>
-
                   <td>{part.category}</td>
-
                   <td>
                     {part.quantity} {part.unit}
                   </td>
-
                   <td>
                     {part.minimum} {part.unit}
                   </td>
-
                   <td>{part.location}</td>
-
                   <td>
                     <span
                       className={`spare-stock-status ${
                         isOutOfStock
                           ? "stock-out"
                           : isLowStock
-                          ? "stock-low"
-                          : "stock-available"
+                            ? "stock-low"
+                            : "stock-available"
                       }`}
                     >
                       {isOutOfStock
                         ? "Out of Stock"
                         : isLowStock
-                        ? "Low Stock"
-                        : "In Stock"}
+                          ? "Low Stock"
+                          : "In Stock"}
                     </span>
                   </td>
-
                   <td>
                     <button
                       type="button"
@@ -373,8 +403,8 @@ useEffect(() => {
       </div>
 
       <p className="spare-parts-demo-note">
-        Sample inventory records are for demonstration. Persistent storage
-        and database integration will be added later.
+        Inventory records are loaded from the database. Stock changes are saved
+        when made by an authenticated user.
       </p>
     </section>
   );

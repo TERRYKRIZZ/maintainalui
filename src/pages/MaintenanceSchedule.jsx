@@ -1,6 +1,8 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 import "./MaintenanceSchedule.css";
+
 
 const initialSchedules = [
   {
@@ -45,33 +47,134 @@ function MaintenanceSchedule() {
     status: "Scheduled",
   });
 
+  
+useEffect(() => {
+  async function loadSchedules() {
+    const { data: scheduleRows, error: scheduleError } = await supabase
+      .from("maintenance_schedules")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (scheduleError) {
+      console.error("Failed to load schedules:", scheduleError.message);
+      return;
+    }
+
+    const { data: equipmentRows, error: equipmentError } = await supabase
+      .from("equipment")
+      .select("id, name, location");
+
+    if (equipmentError) {
+      console.error("Failed to load equipment:", equipmentError.message);
+      return;
+    }
+
+    const equipmentById = new Map(
+      equipmentRows.map((item) => [item.id, item])
+    );
+
+    const savedSchedules = scheduleRows.map((item) => {
+      const linkedEquipment = equipmentById.get(item.equipment_id);
+
+      return {
+        id: item.id,
+        equipment: linkedEquipment?.name || item.title,
+        location: linkedEquipment?.location || "",
+        type: item.maintenance_type || "Preventive",
+        date: item.scheduled_date,
+        technician: item.assigned_to || "",
+        status: item.status,
+      };
+    });
+
+    setSchedules(savedSchedules);
+  }
+
+  loadSchedules();
+}, []);
+
+
   const filteredSchedules = schedules.filter((item) =>
     `${item.equipment} ${item.location} ${item.technician} ${item.type}`
       .toLowerCase()
       .includes(search.toLowerCase())
   );
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
+  
+const handleSubmit = async (event) => {
+  event.preventDefault();
 
-    const newSchedule = {
-      ...form,
-      id: Date.now(),
-    };
+  const equipmentName = form.equipment.trim();
 
-    setSchedules((current) => [...current, newSchedule]);
+  if (!equipmentName || !form.date) {
+    alert("Please enter the equipment name and maintenance date.");
+    return;
+  }
 
-    setForm({
-      equipment: "",
-      location: "",
-      type: "Preventive",
-      date: "",
-      technician: "",
-      status: "Scheduled",
-    });
+  // Find the equipment record so the schedule has a valid database link.
+  const { data: equipmentRecord, error: equipmentError } = await supabase
+    .from("equipment")
+    .select("id")
+    .eq("name", equipmentName)
+    .maybeSingle();
 
-    setShowForm(false);
+  if (equipmentError) {
+    alert("Could not find equipment: " + equipmentError.message);
+    return;
+  }
+
+  if (!equipmentRecord) {
+    alert(
+      `Equipment "${equipmentName}" is not registered in the database. ` +
+      "Please register the equipment first and use its exact name."
+    );
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("maintenance_schedules")
+    .insert({
+      equipment_id: equipmentRecord.id,
+      title: `${form.type} maintenance - ${equipmentName}`,
+      maintenance_type: form.type,
+      scheduled_date: form.date,
+      assigned_to: form.technician.trim() || null,
+      status: form.status,
+      notes: form.location.trim()
+        ? `Location: ${form.location.trim()}`
+        : null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    alert("Could not save maintenance schedule: " + error.message);
+    return;
+  }
+
+  const newSchedule = {
+    id: data.id,
+    equipment: equipmentName,
+    location: form.location,
+    type: data.maintenance_type,
+    date: data.scheduled_date,
+    technician: data.assigned_to || "",
+    status: data.status,
   };
+
+  setSchedules((current) => [...current, newSchedule]);
+
+  setForm({
+    equipment: "",
+    location: "",
+    type: "Preventive",
+    date: "",
+    technician: "",
+    status: "Scheduled",
+  });
+
+  setShowForm(false);
+};
 
   return (
     <section className="maintenance-page">

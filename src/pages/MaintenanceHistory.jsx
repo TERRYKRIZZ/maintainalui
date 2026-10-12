@@ -1,4 +1,6 @@
 
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
 import "./MaintenanceHistory.css";
 
 const maintenanceRecords = [
@@ -41,6 +43,66 @@ const maintenanceRecords = [
 ];
 
 function MaintenanceHistory() {
+    
+  const [maintenanceRecords, setMaintenanceRecords] = useState([]);
+
+  useEffect(() => {
+    async function loadMaintenanceHistory() {
+      const { data: historyRows, error: historyError } = await supabase
+        .from("maintenance_history")
+        .select("*")
+        .order("service_date", { ascending: false });
+
+      if (historyError) {
+        console.error(
+          "Failed to load maintenance history:",
+          historyError.message
+        );
+        return;
+      }
+
+      const { data: equipmentRows, error: equipmentError } = await supabase
+        .from("equipment")
+        .select("id, name, location");
+
+      if (equipmentError) {
+        console.error(
+          "Failed to load equipment details:",
+          equipmentError.message
+        );
+        return;
+      }
+
+      const equipmentById = new Map(
+        equipmentRows.map((item) => [item.id, item])
+      );
+
+      const savedRecords = historyRows.map((item, index) => {
+        const linkedEquipment = equipmentById.get(item.equipment_id);
+
+        return {
+          id: `MH-${String(index + 1).padStart(3, "0")}`,
+          equipment: linkedEquipment?.name || "Unknown equipment",
+          location: linkedEquipment?.location || "",
+          date: new Date(
+            `${item.service_date}T00:00:00`
+          ).toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }),
+          work: item.action_taken,
+          technician: item.technician || "Not assigned",
+          status: "Completed",
+        };
+      });
+
+      setMaintenanceRecords(savedRecords);
+    }
+
+    loadMaintenanceHistory();
+  }, []);
+
   return (
     <div className="history-page">
       <div className="history-heading">
