@@ -33,6 +33,7 @@ function App() {
   const [databaseStatus, setDatabaseStatus] = useState("Checking connection...");
 const [dashboardStats, setDashboardStats] = useState(initialStats);
 const [upcomingSchedules, setUpcomingSchedules] = useState([]);
+const [recentWorkOrders, setRecentWorkOrders] = useState([]);
 
 const [maintenanceHealth, setMaintenanceHealth] = useState({
   operational: 0,
@@ -245,6 +246,79 @@ useEffect(() => {
   }
 
   loadMaintenanceHealth();
+}, [session]);
+
+
+useEffect(() => {
+  if (!session) {
+    setRecentWorkOrders([]);
+    return;
+  }
+
+  async function loadRecentWorkOrders() {
+    const { data: orders, error: ordersError } = await supabase
+      .from("work_orders")
+      .select(
+        "id, work_order_code, equipment_id, location, priority, status, title, created_at"
+      )
+      .order("created_at", { ascending: false })
+      .limit(4);
+
+    if (ordersError) {
+      console.error(
+        "Failed to load recent work orders:",
+        ordersError.message
+      );
+      return;
+    }
+
+    const equipmentIds = [
+      ...new Set(
+        (orders || [])
+          .map((order) => order.equipment_id)
+          .filter(Boolean)
+      ),
+    ];
+
+    let equipmentById = new Map();
+
+    if (equipmentIds.length > 0) {
+      const { data: equipmentRows, error: equipmentError } =
+        await supabase
+          .from("equipment")
+          .select("id, name, location")
+          .in("id", equipmentIds);
+
+      if (equipmentError) {
+        console.error(
+          "Failed to load work order equipment:",
+          equipmentError.message
+        );
+        return;
+      }
+
+      equipmentById = new Map(
+        (equipmentRows || []).map((item) => [item.id, item])
+      );
+    }
+
+    const savedOrders = (orders || []).map((order) => {
+      const equipment = equipmentById.get(order.equipment_id);
+
+      return {
+        id: order.work_order_code || order.id,
+        equipment:
+          equipment?.name || order.title || "Equipment",
+        location: order.location || equipment?.location || "",
+        priority: order.priority || "Medium",
+        status: order.status || "Open",
+      };
+    });
+
+    setRecentWorkOrders(savedOrders);
+  }
+
+  loadRecentWorkOrders();
 }, [session]);
 
 
@@ -677,7 +751,7 @@ useEffect(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      {initialOrders.map((order) => (
+                      {recentWorkOrders.map((order) => (
                         <tr key={order.id}>
                           <td className="order-id">{order.id}</td>
                           <td>{order.equipment}</td>
