@@ -186,11 +186,6 @@ function Reports() {
         </div>
       </div>
 
-      <div className="reports-notice">
-        The figures on this page are illustrative sample data. They are not
-        live totals from the other MaintainalUI modules.
-      </div>
-
       <div className="reports-stats">
         {liveReportStats.map((stat) => (
           <article className="reports-stat-card" key={stat.label}>
@@ -208,7 +203,7 @@ function Reports() {
         <section className="reports-panel">
           <h2>Work Order Summary</h2>
           <p className="reports-panel-description">
-            Example breakdown by work-order status.
+            Current work orders grouped by status.
           </p>
 
           <div className="report-status-list">
@@ -227,7 +222,7 @@ function Reports() {
         <section className="reports-panel">
           <h2>Spare Parts Summary</h2>
           <p className="reports-panel-description">
-            Example inventory indicators.
+            Current stock quantities and reorder levels.
           </p>
 
           <div className="report-inventory-list">

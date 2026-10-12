@@ -120,10 +120,11 @@ function MaintenanceHistory() {
         </div>
       </div>
 
-      <div className="history-notice">
-        These are sample records for demonstration. Replace them with
-        verified maintenance records when available.
-      </div>
+      
+<div className="history-notice">
+  No maintenance history records have been saved yet.
+</div>
+
 
       <div className="history-table-wrapper">
         <table className="history-table">
