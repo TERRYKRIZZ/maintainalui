@@ -648,9 +648,6 @@ useEffect(() => {
 </div>
 
 
-                  <p className="demo-note">
-                    Sample dashboard figures for demonstration.
-                  </p>
                 </section>
               </div>
 
