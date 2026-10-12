@@ -32,6 +32,15 @@ function App() {
   const [activePage, setActivePage] = useState("Overview");
   const [databaseStatus, setDatabaseStatus] = useState("Checking connection...");
 const [dashboardStats, setDashboardStats] = useState(initialStats);
+const [upcomingSchedules, setUpcomingSchedules] = useState([]);
+
+const [maintenanceHealth, setMaintenanceHealth] = useState({
+  operational: 0,
+  underMaintenance: 0,
+  awaitingInspection: 0,
+  percentage: 0,
+});
+
 
 
 useEffect(() => {
@@ -50,6 +59,7 @@ useEffect(() => {
           .from("work_orders")
           .select("status"),
       ]);
+
 
     const errors = [
       equipmentResult.error,
@@ -110,6 +120,133 @@ useEffect(() => {
 
   loadDashboardStats();
 }, [session]);
+
+
+useEffect(() => {
+  if (!session) {
+    setUpcomingSchedules([]);
+    return;
+  }
+
+  async function loadUpcomingSchedules() {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { data: schedules, error: scheduleError } = await supabase
+      .from("maintenance_schedules")
+      .select("id, title, equipment_id, scheduled_date, status")
+      .gte("scheduled_date", today)
+      .order("scheduled_date", { ascending: true })
+      .limit(3);
+
+    if (scheduleError) {
+      console.error(
+        "Failed to load upcoming maintenance:",
+        scheduleError.message
+      );
+      return;
+    }
+
+    const equipmentIds = [
+      ...new Set(
+        (schedules || [])
+          .map((item) => item.equipment_id)
+          .filter(Boolean)
+      ),
+    ];
+
+    let equipmentById = new Map();
+
+    if (equipmentIds.length > 0) {
+      const { data: equipmentRows, error: equipmentError } = await supabase
+        .from("equipment")
+        .select("id, name, location")
+        .in("id", equipmentIds);
+
+      if (equipmentError) {
+        console.error(
+          "Failed to load scheduled equipment:",
+          equipmentError.message
+        );
+        return;
+      }
+
+      equipmentById = new Map(
+        (equipmentRows || []).map((item) => [item.id, item])
+      );
+    }
+
+    const savedSchedules = (schedules || []).map((item) => {
+      const equipment = equipmentById.get(item.equipment_id);
+
+      return {
+        id: item.id,
+        title: item.title || "Maintenance",
+        equipment: equipment?.name || "Equipment",
+        location: equipment?.location || "",
+        date: item.scheduled_date,
+        status: item.status || "Scheduled",
+      };
+    });
+
+    setUpcomingSchedules(savedSchedules);
+  }
+
+  loadUpcomingSchedules();
+}, [session]);
+
+
+useEffect(() => {
+  if (!session) {
+    setMaintenanceHealth({
+      operational: 0,
+      underMaintenance: 0,
+      awaitingInspection: 0,
+      percentage: 0,
+    });
+    return;
+  }
+
+  async function loadMaintenanceHealth() {
+    const { data: equipmentRows, error } = await supabase
+      .from("equipment")
+      .select("status");
+
+    if (error) {
+      console.error("Failed to load maintenance health:", error.message);
+      return;
+    }
+
+    const statuses = (equipmentRows || []).map((item) =>
+      String(item.status || "").trim().toLowerCase()
+    );
+
+    const operational = statuses.filter(
+      (status) => status === "operational"
+    ).length;
+
+    const underMaintenance = statuses.filter((status) =>
+      ["under maintenance", "in maintenance", "maintenance"].includes(status)
+    ).length;
+
+    const awaitingInspection = statuses.filter((status) =>
+      ["awaiting inspection", "inspection pending", "needs inspection"].includes(status)
+    ).length;
+
+    const percentage = statuses.length
+      ? Math.round((operational / statuses.length) * 100)
+      : 0;
+
+    setMaintenanceHealth({
+      operational,
+      underMaintenance,
+      awaitingInspection,
+      percentage,
+    });
+  }
+
+  loadMaintenanceHealth();
+}, [session]);
+
 
 
   useEffect(() => {
@@ -418,41 +555,47 @@ useEffect(() => {
                   </div>
 
                   <div className="schedule-list">
-                    <div className="schedule-item">
-                      <div className="calendar-tile">
-                        <span>OCT</span>
-                        <strong>12</strong>
-                      </div>
-                      <div className="schedule-info">
-                        <strong>Generator routine servicing</strong>
-                        <span>Main Library · Power equipment</span>
-                      </div>
-                      <span className="status-badge status-planned">Scheduled</span>
-                    </div>
+                   
+{upcomingSchedules.length > 0 ? (
+  upcomingSchedules.map((schedule) => {
+    const scheduleDate = new Date(`${schedule.date}T00:00:00`);
+    const month = scheduleDate
+      .toLocaleDateString("en-GB", { month: "short" })
+      .toUpperCase();
+    const day = scheduleDate.toLocaleDateString("en-GB", {
+      day: "2-digit",
+    });
 
-                    <div className="schedule-item">
-                      <div className="calendar-tile">
-                        <span>OCT</span>
-                        <strong>14</strong>
-                      </div>
-                      <div className="schedule-info">
-                        <strong>Air conditioner inspection</strong>
-                        <span>Faculty of Science · HVAC</span>
-                      </div>
-                      <span className="status-badge status-progress">Upcoming</span>
-                    </div>
+    const statusClass =
+      String(schedule.status).toLowerCase() === "in progress"
+        ? "status-progress"
+        : "status-planned";
 
-                    <div className="schedule-item">
-                      <div className="calendar-tile">
-                        <span>OCT</span>
-                        <strong>16</strong>
-                      </div>
-                      <div className="schedule-info">
-                        <strong>Water pump preventive check</strong>
-                        <span>Student Hostel · Plumbing</span>
-                      </div>
-                      <span className="status-badge status-planned">Scheduled</span>
-                    </div>
+    return (
+      <div className="schedule-item" key={schedule.id}>
+        <div className="calendar-tile">
+          <span>{month}</span>
+          <strong>{day}</strong>
+        </div>
+
+        <div className="schedule-info">
+          <strong>{schedule.title}</strong>
+          <span>
+            {schedule.equipment}
+            {schedule.location ? ` · ${schedule.location}` : ""}
+          </span>
+        </div>
+
+        <span className={`status-badge ${statusClass}`}>
+          {schedule.status}
+        </span>
+      </div>
+    );
+  })
+) : (
+  <p>No upcoming maintenance schedules.</p>
+)}
+
                   </div>
                 </section>
 
@@ -460,35 +603,50 @@ useEffect(() => {
                   <div className="panel-heading">
                     <div>
                       <h2>Maintenance Health</h2>
-                      <p>Illustrative overview</p>
+                      <p>Live equipment status</p>
                     </div>
                     <span className="health-symbol">↗</span>
                   </div>
 
                   <div className="health-score">
                     <div>
-                      <strong>92%</strong>
+                      <strong>{maintenanceHealth.percentage}%</strong>
                       <span>Operational status</span>
                     </div>
-                    <span className="health-pill">Good condition</span>
+                    <span className="health-pill">
+  {maintenanceHealth.percentage >= 90
+    ? "Good condition"
+    : maintenanceHealth.percentage >= 70
+      ? "Monitor condition"
+      : maintenanceHealth.percentage > 0
+        ? "Attention required"
+        : "No equipment data"}
+</span>
                   </div>
 
                   <div className="progress-track">
-                    <div className="progress-fill" />
+                    <div
+  className="progress-fill"
+  style={{ width: `${maintenanceHealth.percentage}%` }}
+/>
                   </div>
 
-                  <div className="health-row">
-                    <span>Equipment operational</span>
-                    <strong>228</strong>
-                  </div>
-                  <div className="health-row">
-                    <span>Under maintenance</span>
-                    <strong>12</strong>
-                  </div>
-                  <div className="health-row">
-                    <span>Awaiting inspection</span>
-                    <strong>8</strong>
-                  </div>
+                  
+<div className="health-row">
+  <span>Equipment operational</span>
+  <strong>{maintenanceHealth.operational}</strong>
+</div>
+
+<div className="health-row">
+  <span>Under maintenance</span>
+  <strong>{maintenanceHealth.underMaintenance}</strong>
+</div>
+
+<div className="health-row">
+  <span>Awaiting inspection</span>
+  <strong>{maintenanceHealth.awaitingInspection}</strong>
+</div>
+
 
                   <p className="demo-note">
                     Sample dashboard figures for demonstration.
