@@ -31,6 +31,86 @@ function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [activePage, setActivePage] = useState("Overview");
   const [databaseStatus, setDatabaseStatus] = useState("Checking connection...");
+const [dashboardStats, setDashboardStats] = useState(initialStats);
+
+
+useEffect(() => {
+  if (!session) return;
+
+  async function loadDashboardStats() {
+    const [equipmentResult, faultsResult, ordersResult] =
+      await Promise.all([
+        supabase
+          .from("equipment")
+          .select("id", { count: "exact", head: true }),
+        supabase
+          .from("fault_reports")
+          .select("status"),
+        supabase
+          .from("work_orders")
+          .select("status"),
+      ]);
+
+    const errors = [
+      equipmentResult.error,
+      faultsResult.error,
+      ordersResult.error,
+    ].filter(Boolean);
+
+    if (errors.length > 0) {
+      console.error("Failed to load dashboard statistics:", errors);
+      return;
+    }
+
+    const faults = faultsResult.data || [];
+    const orders = ordersResult.data || [];
+
+    const needsAttention = faults.filter(
+      (fault) =>
+        !["resolved", "completed", "closed"].includes(
+          String(fault.status).toLowerCase()
+        )
+    ).length;
+
+    const openOrders = orders.filter(
+      (order) =>
+        !["completed", "cancelled"].includes(
+          String(order.status).toLowerCase()
+        )
+    ).length;
+
+    const completedJobs = orders.filter(
+      (order) =>
+        String(order.status).toLowerCase() === "completed"
+    ).length;
+
+    setDashboardStats([
+      {
+        ...initialStats[0],
+        value: String(equipmentResult.count ?? 0),
+        detail: "Registered assets",
+      },
+      {
+        ...initialStats[1],
+        value: String(needsAttention),
+        detail: "Unresolved fault reports",
+      },
+      {
+        ...initialStats[2],
+        value: String(openOrders),
+        detail: "Not yet completed",
+      },
+      {
+        ...initialStats[3],
+        value: String(completedJobs),
+        detail: "Completed work orders",
+      },
+    ]);
+  }
+
+  loadDashboardStats();
+}, [session]);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -310,7 +390,7 @@ function App() {
               </div>
 
               <div className="stats-grid">
-                {initialStats.map((stat) => (
+                {dashboardStats.map((stat) => (
                   <article className="stat-card" key={stat.label}>
                     <div className="stat-card-top">
                       <span>{stat.label}</span>
