@@ -195,3 +195,13 @@
     padding: 18px;
   }
 }
+
+.reports-error {
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border: 1px solid #f5b7b1;
+  border-radius: 8px;
+  background-color: #fcebea;
+  color: #922b21;
+  font-size: 14px;
+}

@@ -1,75 +1,57 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import "./Equipment.css";
 
-
-const startingEquipment = [
-  {
-    id: 1,
-    assetId: "EQ-001",
-    name: "Main Generator",
-    category: "Power Equipment",
-    location: "Central Library",
-    condition: "Operational",
-  },
-  {
-    id: 2,
-    assetId: "EQ-002",
-    name: "Air Conditioning Unit",
-    category: "HVAC",
-    location: "Faculty of Science",
-    condition: "Needs Attention",
-  },
-  {
-    id: 3,
-    assetId: "EQ-003",
-    name: "Water Pump",
-    category: "Plumbing",
-    location: "Student Hostel",
-    condition: "Operational",
-  },
-];
+const emptyForm = {
+  assetId: "",
+  name: "",
+  category: "",
+  location: "",
+  condition: "Operational",
+};
 
 function Equipment() {
-  const [equipment, setEquipment] = useState(startingEquipment);
-  
+  const [equipment, setEquipment] = useState([]);
+  const [search, setSearch] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ ...emptyForm });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const submittingRef = useRef(false);
+
+  // Load real equipment records from Supabase.
   useEffect(() => {
     async function loadEquipment() {
-      const { data, error } = await supabase
-        .from("equipment")
-        .select("*")
-        .order("created_at", { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from("equipment")
+          .select("*")
+          .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Failed to load equipment:", error.message);
-        return;
+        if (error) throw error;
+
+        setEquipment(
+          (data || []).map((item) => ({
+            id: item.id,
+            assetId: item.asset_tag || "",
+            name: item.name || "",
+            category: item.category || "",
+            location: item.location || "",
+            condition: item.status || "Operational",
+          }))
+        );
+      } catch (error) {
+        console.error("Failed to load equipment:", error);
+        alert("Could not load equipment: " + error.message);
+      } finally {
+        setIsLoading(false);
       }
-
-      setEquipment(
-        data.map((item) => ({
-          id: item.id,
-          assetId: item.asset_tag,
-          name: item.name,
-          category: item.category || "",
-          location: item.location || "",
-          condition: item.status,
-        }))
-      );
     }
 
     loadEquipment();
   }, []);
-
-  const [search, setSearch] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    assetId: "",
-    name: "",
-    category: "",
-    location: "",
-    condition: "Operational",
-  });
 
   const filteredEquipment = equipment.filter((item) => {
     const query = search.toLowerCase();
@@ -77,54 +59,156 @@ function Equipment() {
     return (
       item.name.toLowerCase().includes(query) ||
       item.assetId.toLowerCase().includes(query) ||
-      item.location.toLowerCase().includes(query)
+      item.location.toLowerCase().includes(query) ||
+      item.category.toLowerCase().includes(query)
     );
   });
 
-  
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-
-    const { data, error } = await supabase
-      .from("equipment")
-      .insert({
-        asset_tag: form.assetId.trim(),
-        name: form.name.trim(),
-        category: form.category || null,
-        location: form.location || null,
-        status: form.condition,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Failed to save equipment:", error.message);
-      alert(`Could not save equipment: ${error.message}`);
-      return;
-    }
-
-    const newEquipment = {
-      id: data.id,
-      assetId: data.asset_tag,
-      name: data.name,
-      category: data.category || "",
-      location: data.location || "",
-      condition: data.status,
-    };
-
-    setEquipment((current) => [...current, newEquipment]);
-
-    setForm({
-      assetId: "",
-      name: "",
-      category: "",
-      location: "",
-      condition: "Operational",
-    });
-
+  const resetForm = () => {
+    setForm({ ...emptyForm });
+    setEditingId(null);
     setShowForm(false);
   };
 
+  // Open an existing equipment record for editing.
+  const handleEdit = (item) => {
+    setEditingId(item.id);
+    setForm({
+      assetId: item.assetId,
+      name: item.name,
+      category: item.category,
+      location: item.location,
+      condition: item.condition,
+    });
+    setShowForm(true);
+  };
+
+  // Register new equipment or update an existing record.
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
+    setIsSaving(true);
+
+    const wasEditing = editingId !== null;
+
+    try {
+      const payload = {
+        asset_tag: form.assetId.trim(),
+        name: form.name.trim(),
+        category: form.category.trim(),
+        location: form.location.trim(),
+        status: form.condition,
+      };
+
+      if (
+        !payload.asset_tag ||
+        !payload.name ||
+        !payload.category ||
+        !payload.location
+      ) {
+        alert("Please complete all required fields.");
+        return;
+      }
+
+      let data;
+      let error;
+
+      if (wasEditing) {
+        const result = await supabase
+          .from("equipment")
+          .update(payload)
+          .eq("id", editingId)
+          .select()
+          .single();
+
+        data = result.data;
+        error = result.error;
+      } else {
+        const result = await supabase
+          .from("equipment")
+          .insert(payload)
+          .select()
+          .single();
+
+        data = result.data;
+        error = result.error;
+      }
+
+      if (error) {
+        alert("Could not save equipment: " + error.message);
+        return;
+      }
+
+      const savedEquipment = {
+        id: data.id,
+        assetId: data.asset_tag || "",
+        name: data.name || "",
+        category: data.category || "",
+        location: data.location || "",
+        condition: data.status || "Operational",
+      };
+
+      if (wasEditing) {
+        setEquipment((current) =>
+          current.map((item) =>
+            item.id === editingId ? savedEquipment : item
+          )
+        );
+      } else {
+        setEquipment((current) => [savedEquipment, ...current]);
+      }
+
+      resetForm();
+
+      alert(
+        wasEditing
+          ? "Equipment updated successfully."
+          : "Equipment registered successfully."
+      );
+    } catch (error) {
+      console.error("Equipment save failed:", error);
+      alert("An unexpected error occurred: " + error.message);
+    } finally {
+      submittingRef.current = false;
+      setIsSaving(false);
+    }
+  };
+
+  // Delete equipment after confirmation.
+  const handleDelete = async (item) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${item.name} (${item.assetId})?`
+    );
+
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("equipment")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) {
+      alert(
+        "Could not delete equipment: " +
+          error.message +
+          "\n\nCheck whether related maintenance records or database permissions prevent deletion."
+      );
+      return;
+    }
+
+    setEquipment((current) =>
+      current.filter((record) => record.id !== item.id)
+    );
+
+    if (editingId === item.id) {
+      resetForm();
+    }
+
+    alert("Equipment deleted successfully.");
+  };
 
   return (
     <section className="equipment-page">
@@ -138,16 +222,29 @@ function Equipment() {
         </div>
 
         <button
+          type="button"
           className="primary-button"
-          onClick={() => setShowForm((current) => !current)}
+          onClick={() => {
+            if (showForm) {
+              resetForm();
+            } else {
+              setForm({ ...emptyForm });
+              setEditingId(null);
+              setShowForm(true);
+            }
+          }}
         >
-          + Register Equipment
+          {showForm ? "Close Form" : "+ Register Equipment"}
         </button>
       </div>
 
       {showForm && (
         <form className="equipment-form" onSubmit={handleSubmit}>
-          <h3>Register New Equipment</h3>
+          <h3>
+            {editingId !== null
+              ? "Edit Equipment"
+              : "Register New Equipment"}
+          </h3>
 
           <label>
             Asset ID
@@ -212,14 +309,23 @@ function Equipment() {
           </label>
 
           <div className="equipment-form-actions">
-            <button type="submit" className="primary-button">
-              Save Equipment
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={isSaving}
+            >
+              {isSaving
+                ? "Saving..."
+                : editingId !== null
+                  ? "Update Equipment"
+                  : "Save Equipment"}
             </button>
 
             <button
               type="button"
               className="secondary-button"
-              onClick={() => setShowForm(false)}
+              onClick={resetForm}
+              disabled={isSaving}
             >
               Cancel
             </button>
@@ -247,45 +353,64 @@ function Equipment() {
               <th>Category</th>
               <th>Location</th>
               <th>Condition</th>
+              <th>Actions</th>
             </tr>
           </thead>
 
           <tbody>
-            {filteredEquipment.map((item) => (
-              <tr key={item.id}>
-                <td className="order-id">{item.assetId}</td>
-                <td>{item.name}</td>
-                <td>{item.category}</td>
-                <td>{item.location}</td>
-                <td>
-                  <span
-                    className={`equipment-condition ${
-                      item.condition === "Operational"
-                        ? "condition-good"
-                        : item.condition === "Needs Attention"
-                          ? "condition-warning"
-                          : "condition-maintenance"
-                    }`}
-                  >
-                    {item.condition}
-                  </span>
-                </td>
-              </tr>
-            ))}
-
-            {filteredEquipment.length === 0 && (
+            {isLoading && (
               <tr>
-                <td colSpan="5">No matching equipment found.</td>
+                <td colSpan="6">Loading equipment...</td>
+              </tr>
+            )}
+
+            {!isLoading &&
+              filteredEquipment.map((item) => (
+                <tr key={item.id}>
+                  <td className="order-id">{item.assetId}</td>
+                  <td>{item.name}</td>
+                  <td>{item.category}</td>
+                  <td>{item.location}</td>
+                  <td>
+                    <span
+                      className={`equipment-condition ${
+                        item.condition === "Operational"
+                          ? "condition-good"
+                          : item.condition === "Needs Attention"
+                            ? "condition-warning"
+                            : "condition-maintenance"
+                      }`}
+                    >
+                      {item.condition}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => handleEdit(item)}
+                    >
+                      Edit
+                    </button>{" "}
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => handleDelete(item)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+
+            {!isLoading && filteredEquipment.length === 0 && (
+              <tr>
+                <td colSpan="6">No matching equipment found.</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-
-      <p className="equipment-demo-note">
-        Demonstration records only. Replace these with verified equipment
-        records when the database is connected.
-      </p>
     </section>
   );
 }

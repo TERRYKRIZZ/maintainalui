@@ -4,41 +4,11 @@ import { supabase } from "../lib/supabase";
 import "./WorkOrders.css";
 
 
-const initialWorkOrders = [
-  {
-    id: "WO-1048",
-    equipment: "Main Generator",
-    location: "Central Library",
-    issue: "Routine generator servicing",
-    technician: "Maintenance Team A",
-    priority: "High",
-    status: "In Progress",
-    date: "2026-10-10",
-  },
-  {
-    id: "WO-1047",
-    equipment: "Air Conditioning Unit",
-    location: "Faculty of Science",
-    issue: "Inspect cooling performance",
-    technician: "Technician B",
-    priority: "Medium",
-    status: "Open",
-    date: "2026-10-10",
-  },
-  {
-    id: "WO-1046",
-    equipment: "Water Pump",
-    location: "Student Hostel",
-    issue: "Investigate reduced water pressure",
-    technician: "Technician C",
-    priority: "Critical",
-    status: "Open",
-    date: "2026-10-09",
-  },
-];
+function WorkOrders({ selectedFault, onClearSelectedFault }) {
+  const [workOrders, setWorkOrders] = useState([]);
+  
+const [faultReports, setFaultReports] = useState([]);
 
-function WorkOrders() {
-  const [workOrders, setWorkOrders] = useState(initialWorkOrders);
   
 useEffect(() => {
   async function loadWorkOrders() {
@@ -86,16 +56,55 @@ useEffect(() => {
   loadWorkOrders();
 }, []);
 
+
+useEffect(() => {
+  async function loadFaultReports() {
+    const { data, error } = await supabase
+      .from("fault_reports")
+      .select("id, title, description, equipment_id, status")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to load fault reports:", error.message);
+      return;
+    }
+
+    setFaultReports(data || []);
+  }
+
+  loadFaultReports();
+}, []);
+
+
+useEffect(() => {
+  if (!selectedFault) return;
+
+  setForm((current) => ({
+    ...current,
+    equipment: selectedFault.equipment || "",
+    location: selectedFault.location || "",
+    issue: selectedFault.description || "",
+    faultReportId: String(selectedFault.id),
+  }));
+
+  setShowForm(true);
+}, [selectedFault]);
+
+
+
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
 
-  const [form, setForm] = useState({
-    equipment: "",
-    location: "",
-    issue: "",
-    technician: "",
-    priority: "Medium",
-  });
+  
+const [form, setForm] = useState({
+  equipment: "",
+  location: "",
+  issue: "",
+  technician: "",
+  priority: "Medium",
+  faultReportId: "",
+});
+
 
   const filteredOrders = workOrders.filter((order) =>
     `${order.id} ${order.equipment} ${order.location} ${order.issue} ${order.technician} ${order.status}`
@@ -139,6 +148,27 @@ const handleSubmit = async (event) => {
     return;
   }
 
+  
+if (form.faultReportId) {
+  const selectedReport = faultReports.find(
+    (report) => String(report.id) === String(form.faultReportId)
+  );
+
+  if (!selectedReport) {
+    alert("Please select a valid fault report.");
+    return;
+  }
+
+  if (String(selectedReport.equipment_id) !== String(equipmentRecord.id)) {
+    alert(
+      "The selected fault report belongs to different equipment. " +
+      "Please enter the matching equipment name."
+    );
+    return;
+  }
+}
+
+
   // Generate the next work-order number for this page.
   const existingNumbers = workOrders
     .map((order) => String(order.id).match(/^WO-(\d+)$/))
@@ -154,6 +184,7 @@ const handleSubmit = async (event) => {
     .insert({
       work_order_code: workOrderCode,
       equipment_id: equipmentRecord.id,
+      fault_report_id: form.faultReportId || null,
       title: form.issue.trim(),
       description: form.issue.trim(),
       priority: form.priority,
@@ -182,18 +213,22 @@ const handleSubmit = async (event) => {
 
   setWorkOrders((current) => [...current, newOrder]);
 
-  setForm({
-    equipment: "",
-    location: "",
-    issue: "",
-    technician: "",
-    priority: "Medium",
-  });
+  
+setForm({
+  equipment: "",
+  location: "",
+  issue: "",
+  technician: "",
+  priority: "Medium",
+  faultReportId: "",
+});
 
-  setShowForm(false);
+setShowForm(false);
+
+if (onClearSelectedFault) {
+  onClearSelectedFault();
+}
 };
-
-
   
 const updateStatus = async (id, status) => {
   const { error } = await supabase
@@ -282,6 +317,26 @@ const updateStatus = async (id, status) => {
               placeholder="e.g. Classroom Projector"
             />
           </label>
+
+          
+<label>
+  Link Fault Report (Optional)
+  <select
+    value={form.faultReportId}
+    onChange={(event) =>
+      setForm({ ...form, faultReportId: event.target.value })
+    }
+  >
+    <option value="">No fault report linked</option>
+
+    {faultReports.map((report) => (
+      <option key={report.id} value={report.id}>
+        {report.title} — {report.status} — {report.id}
+      </option>
+    ))}
+  </select>
+</label>
+
 
           <label>
             Location
@@ -442,11 +497,6 @@ const updateStatus = async (id, status) => {
           </tbody>
         </table>
       </div>
-
-      <p className="work-orders-demo-note">
-        Sample work orders are for demonstration. Database integration and
-        persistent storage will be added later.
-      </p>
     </section>
   );
 }

@@ -3,45 +3,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import "./Reports.css";
 
-const reportStats = [
-  {
-    label: "Total Equipment",
-    value: "248",
-    description: "Registered assets",
-    icon: "⚙️",
-  },
-  {
-    label: "Reported Faults",
-    value: "12",
-    description: "Illustrative figure",
-    icon: "⚠️",
-  },
-  {
-    label: "Open Work Orders",
-    value: "18",
-    description: "Illustrative figure",
-    icon: "🛠️",
-  },
-  {
-    label: "Completed Jobs",
-    value: "86",
-    description: "Illustrative figure",
-    icon: "✅",
-  },
-];
-
-const workOrderSummary = [
-  { label: "Pending", count: 6, className: "report-pending" },
-  { label: "In Progress", count: 8, className: "report-progress" },
-  { label: "Completed", count: 4, className: "report-completed" },
-];
-
-const inventorySummary = [
-  { label: "Total stock units", value: "44" },
-  { label: "Low-stock items", value: "3" },
-  { label: "Out-of-stock items", value: "0" },
-];
-
 function Reports() {
     
   const [liveReportStats, setLiveReportStats] = useState([
@@ -62,6 +23,8 @@ function Reports() {
     { label: "Low-stock items", value: "0" },
     { label: "Out-of-stock items", value: "0" },
   ]);
+
+  const [reportError, setReportError] = useState("");
 
   useEffect(() => {
     async function loadReports() {
@@ -84,10 +47,17 @@ function Reports() {
         partsResult.error,
       ].filter(Boolean);
 
+      
       if (errors.length > 0) {
         console.error("Failed to load reports:", errors);
+        setReportError(
+          "Unable to load reports. Please refresh the page and try again."
+        );
         return;
       }
+
+      setReportError("");
+
 
       const orders = ordersResult.data || [];
       const parts = partsResult.data || [];
@@ -176,6 +146,13 @@ function Reports() {
 
   return (
     <div className="reports-page">
+      
+      {reportError && (
+        <p className="reports-error" role="alert">
+          {reportError}
+        </p>
+      )}
+
       <div className="reports-heading">
         <div>
           <p className="eyebrow">FACILITIES MANAGEMENT</p>

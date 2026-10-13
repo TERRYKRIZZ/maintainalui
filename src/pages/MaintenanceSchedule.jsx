@@ -1,98 +1,77 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import "./MaintenanceSchedule.css";
 
-
-const initialSchedules = [
-  {
-    id: 1,
-    equipment: "Main Generator",
-    location: "Central Library",
-    type: "Preventive",
-    date: "2026-10-12",
-    technician: "Maintenance Team A",
-    status: "Scheduled",
-  },
-  {
-    id: 2,
-    equipment: "Air Conditioning Unit",
-    location: "Faculty of Science",
-    type: "Inspection",
-    date: "2026-10-14",
-    technician: "Maintenance Team B",
-    status: "Scheduled",
-  },
-  {
-    id: 3,
-    equipment: "Water Pump",
-    location: "Student Hostel",
-    type: "Preventive",
-    date: "2026-10-16",
-    technician: "Maintenance Team A",
-    status: "In Progress",
-  },
-];
+const emptyForm = {
+  equipment: "",
+  location: "",
+  type: "Preventive",
+  date: "",
+  technician: "",
+  status: "Scheduled",
+};
 
 function MaintenanceSchedule() {
-  const [schedules, setSchedules] = useState(initialSchedules);
+  const [schedules, setSchedules] = useState([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    equipment: "",
-    location: "",
-    type: "Preventive",
-    date: "",
-    technician: "",
-    status: "Scheduled",
-  });
+  const [editingScheduleId, setEditingScheduleId] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const submittingRef = useRef(false);
 
-  
-useEffect(() => {
-  async function loadSchedules() {
-    const { data: scheduleRows, error: scheduleError } = await supabase
-      .from("maintenance_schedules")
-      .select("*")
-      .order("created_at", { ascending: false });
+  // Load saved schedules and equipment from Supabase.
+  useEffect(() => {
+    async function loadSchedules() {
+      try {
+        const { data: scheduleRows, error: scheduleError } =
+          await supabase
+            .from("maintenance_schedules")
+            .select("*")
+            .order("created_at", { ascending: false });
 
-    if (scheduleError) {
-      console.error("Failed to load schedules:", scheduleError.message);
-      return;
+        if (scheduleError) throw scheduleError;
+
+        const { data: equipmentRows, error: equipmentError } =
+          await supabase
+            .from("equipment")
+            .select("id, name, location");
+
+        if (equipmentError) throw equipmentError;
+
+        const equipmentById = new Map(
+          (equipmentRows || []).map((item) => [item.id, item])
+        );
+
+        const savedSchedules = (scheduleRows || []).map((item) => {
+          const equipment = equipmentById.get(item.equipment_id);
+
+          return {
+            id: item.id,
+            equipment: equipment?.name || item.title || "Unknown equipment",
+            location:
+              equipment?.location ||
+              (item.notes || "").replace(/^Location:\s*/, ""),
+            type: item.maintenance_type || "Preventive",
+            date: item.scheduled_date || "",
+            technician: item.assigned_to || "",
+            status: item.status || "Scheduled",
+          };
+        });
+
+        setSchedules(savedSchedules);
+      } catch (error) {
+        console.error("Failed to load maintenance schedules:", error);
+        alert("Could not load maintenance schedules: " + error.message);
+      } finally {
+        setIsLoading(false);
+      }
     }
 
-    const { data: equipmentRows, error: equipmentError } = await supabase
-      .from("equipment")
-      .select("id, name, location");
-
-    if (equipmentError) {
-      console.error("Failed to load equipment:", equipmentError.message);
-      return;
-    }
-
-    const equipmentById = new Map(
-      equipmentRows.map((item) => [item.id, item])
-    );
-
-    const savedSchedules = scheduleRows.map((item) => {
-      const linkedEquipment = equipmentById.get(item.equipment_id);
-
-      return {
-        id: item.id,
-        equipment: linkedEquipment?.name || item.title,
-        location: linkedEquipment?.location || "",
-        type: item.maintenance_type || "Preventive",
-        date: item.scheduled_date,
-        technician: item.assigned_to || "",
-        status: item.status,
-      };
-    });
-
-    setSchedules(savedSchedules);
-  }
-
-  loadSchedules();
-}, []);
-
+    loadSchedules();
+  }, []);
 
   const filteredSchedules = schedules.filter((item) =>
     `${item.equipment} ${item.location} ${item.technician} ${item.type}`
@@ -100,98 +79,224 @@ useEffect(() => {
       .includes(search.toLowerCase())
   );
 
-  
-const handleSubmit = async (event) => {
-  event.preventDefault();
-
-  const equipmentName = form.equipment.trim();
-
-  if (!equipmentName || !form.date) {
-    alert("Please enter the equipment name and maintenance date.");
-    return;
-  }
-
-  // Find the equipment record so the schedule has a valid database link.
-  const { data: equipmentRecord, error: equipmentError } = await supabase
-    .from("equipment")
-    .select("id")
-    .eq("name", equipmentName)
-    .maybeSingle();
-
-  if (equipmentError) {
-    alert("Could not find equipment: " + equipmentError.message);
-    return;
-  }
-
-  if (!equipmentRecord) {
-    alert(
-      `Equipment "${equipmentName}" is not registered in the database. ` +
-      "Please register the equipment first and use its exact name."
-    );
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("maintenance_schedules")
-    .insert({
-      equipment_id: equipmentRecord.id,
-      title: `${form.type} maintenance - ${equipmentName}`,
-      maintenance_type: form.type,
-      scheduled_date: form.date,
-      assigned_to: form.technician.trim() || null,
-      status: form.status,
-      notes: form.location.trim()
-        ? `Location: ${form.location.trim()}`
-        : null,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    alert("Could not save maintenance schedule: " + error.message);
-    return;
-  }
-
-  const newSchedule = {
-    id: data.id,
-    equipment: equipmentName,
-    location: form.location,
-    type: data.maintenance_type,
-    date: data.scheduled_date,
-    technician: data.assigned_to || "",
-    status: data.status,
+  // Reset the form.
+  const resetForm = () => {
+    setForm({ ...emptyForm });
+    setEditingScheduleId(null);
+    setShowForm(false);
   };
 
-  setSchedules((current) => [...current, newSchedule]);
+  // Open an existing schedule for editing.
+  const handleEdit = (item) => {
+    setEditingScheduleId(item.id);
+    setForm({
+      equipment: item.equipment || "",
+      location: item.location || "",
+      type: item.type || "Preventive",
+      date: item.date || "",
+      technician: item.technician || "",
+      status: item.status || "Scheduled",
+    });
+    setShowForm(true);
+  };
 
-  setForm({
-    equipment: "",
-    location: "",
-    type: "Preventive",
-    date: "",
-    technician: "",
-    status: "Scheduled",
-  });
+  // Create a schedule or update an existing one.
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-  setShowForm(false);
-};
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
+    setIsSaving(true);
+
+    const wasEditing = editingScheduleId !== null;
+
+    try {
+      const equipmentName = form.equipment.trim();
+
+      if (
+        !equipmentName ||
+        !form.location.trim() ||
+        !form.date ||
+        !form.technician.trim()
+      ) {
+        alert("Please complete all required fields.");
+        return;
+      }
+
+      const { data: equipmentRecord, error: equipmentError } =
+        await supabase
+          .from("equipment")
+          .select("id, name, location")
+          .eq("name", equipmentName)
+          .maybeSingle();
+
+      if (equipmentError) {
+        alert("Could not find equipment: " + equipmentError.message);
+        return;
+      }
+
+      if (!equipmentRecord) {
+        alert(
+          `Equipment "${equipmentName}" is not registered. ` +
+            "Please register it first and use its exact name."
+        );
+        return;
+      }
+
+      const schedulePayload = {
+        equipment_id: equipmentRecord.id,
+        title: `${form.type} maintenance - ${equipmentName}`,
+        maintenance_type: form.type,
+        scheduled_date: form.date,
+        assigned_to: form.technician.trim(),
+        status: form.status,
+        notes: `Location: ${form.location.trim()}`,
+      };
+
+      let data;
+      let error;
+
+      if (wasEditing) {
+        const result = await supabase
+          .from("maintenance_schedules")
+          .update(schedulePayload)
+          .eq("id", editingScheduleId)
+          .select()
+          .single();
+
+        data = result.data;
+        error = result.error;
+      } else {
+        const result = await supabase
+          .from("maintenance_schedules")
+          .insert(schedulePayload)
+          .select()
+          .single();
+
+        data = result.data;
+        error = result.error;
+      }
+
+      if (error) {
+        alert("Could not save maintenance schedule: " + error.message);
+        return;
+      }
+
+      const savedSchedule = {
+        id: data.id,
+        equipment: equipmentName,
+        location: form.location.trim(),
+        type: data.maintenance_type || form.type,
+        date: data.scheduled_date,
+        technician: data.assigned_to || "",
+        status: data.status || "Scheduled",
+      };
+
+      if (wasEditing) {
+        setSchedules((current) =>
+          current.map((item) =>
+            item.id === editingScheduleId ? savedSchedule : item
+          )
+        );
+      } else {
+        setSchedules((current) => [savedSchedule, ...current]);
+      }
+
+      resetForm();
+
+      alert(
+        wasEditing
+          ? "Maintenance schedule updated successfully."
+          : "Maintenance schedule saved successfully."
+      );
+    } catch (error) {
+      console.error("Maintenance schedule save failed:", error);
+      alert("An unexpected error occurred while saving: " + error.message);
+    } finally {
+      submittingRef.current = false;
+      setIsSaving(false);
+    }
+  };
+
+  // Update a schedule's status in Supabase.
+  const handleStatusChange = async (id, newStatus) => {
+    const previousSchedules = schedules;
+
+    setSchedules((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, status: newStatus } : item
+      )
+    );
+
+    const { error } = await supabase
+      .from("maintenance_schedules")
+      .update({ status: newStatus })
+      .eq("id", id);
+
+    if (error) {
+      setSchedules(previousSchedules);
+      alert("Could not update status: " + error.message);
+    }
+  };
+
+  // Delete a schedule from Supabase after confirmation.
+  const handleDelete = async (item) => {
+    const confirmed = window.confirm(
+      `Delete the maintenance schedule for ${item.equipment} on ${item.date}?`
+    );
+
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("maintenance_schedules")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) {
+      alert("Could not delete schedule: " + error.message);
+      return;
+    }
+
+    setSchedules((current) =>
+      current.filter((schedule) => schedule.id !== item.id)
+    );
+
+    if (editingScheduleId === item.id) {
+      resetForm();
+    }
+
+    alert("Maintenance schedule deleted successfully.");
+  };
 
   return (
     <section className="maintenance-page">
       <div className="maintenance-heading">
         <div>
-          <p className="eyebrow">PLANNING & PREVENTION</p>
+          <p className="eyebrow">PLANNING &amp; PREVENTION</p>
           <h2>Maintenance Schedule</h2>
           <p className="maintenance-subtitle">
-            Plan equipment servicing and track upcoming maintenance activities.
+            Plan equipment servicing and track upcoming maintenance
+            activities.
           </p>
         </div>
 
         <button
+          type="button"
           className="primary-button"
-          onClick={() => setShowForm((current) => !current)}
+          onClick={() => {
+            if (showForm && editingScheduleId !== null) {
+              resetForm();
+            } else if (showForm) {
+              resetForm();
+            } else {
+              setForm({ ...emptyForm });
+              setEditingScheduleId(null);
+              setShowForm(true);
+            }
+          }}
         >
-          + Schedule Maintenance
+          {showForm ? "Close Form" : "+ Schedule Maintenance"}
         </button>
       </div>
 
@@ -200,12 +305,14 @@ const handleSubmit = async (event) => {
           <span>Total Schedules</span>
           <strong>{schedules.length}</strong>
         </article>
+
         <article>
           <span>Scheduled</span>
           <strong>
             {schedules.filter((item) => item.status === "Scheduled").length}
           </strong>
         </article>
+
         <article>
           <span>In Progress</span>
           <strong>
@@ -216,7 +323,11 @@ const handleSubmit = async (event) => {
 
       {showForm && (
         <form className="maintenance-form" onSubmit={handleSubmit}>
-          <h3>Create Maintenance Schedule</h3>
+          <h3>
+            {editingScheduleId !== null
+              ? "Edit Maintenance Schedule"
+              : "Create Maintenance Schedule"}
+          </h3>
 
           <label>
             Equipment Name
@@ -296,13 +407,23 @@ const handleSubmit = async (event) => {
           </label>
 
           <div className="maintenance-form-actions">
-            <button type="submit" className="primary-button">
-              Save Schedule
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={isSaving}
+            >
+              {isSaving
+                ? "Saving..."
+                : editingScheduleId !== null
+                  ? "Update Schedule"
+                  : "Save Schedule"}
             </button>
+
             <button
               type="button"
               className="secondary-button"
-              onClick={() => setShowForm(false)}
+              onClick={resetForm}
+              disabled={isSaving}
             >
               Cancel
             </button>
@@ -330,51 +451,79 @@ const handleSubmit = async (event) => {
               <th>Date</th>
               <th>Technician</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
 
           <tbody>
-            {filteredSchedules.map((item) => (
-              <tr key={item.id}>
-                <td>{item.equipment}</td>
-                <td>{item.location}</td>
-                <td>{item.type}</td>
-                <td>
-                  {new Date(`${item.date}T00:00:00`).toLocaleDateString(
-                    "en-GB",
-                    { day: "2-digit", month: "short", year: "numeric" }
-                  )}
-                </td>
-                <td>{item.technician}</td>
-                <td>
-                  <span
-                    className={`maintenance-status ${
-                      item.status === "Completed"
-                        ? "maintenance-status-complete"
-                        : item.status === "In Progress"
-                          ? "maintenance-status-progress"
-                          : "maintenance-status-scheduled"
-                    }`}
-                  >
-                    {item.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-
-            {filteredSchedules.length === 0 && (
+            {isLoading && (
               <tr>
-                <td colSpan="6">No matching schedules found.</td>
+                <td colSpan="7">Loading maintenance schedules...</td>
+              </tr>
+            )}
+
+            {!isLoading &&
+              filteredSchedules.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.equipment}</td>
+                  <td>{item.location}</td>
+                  <td>{item.type}</td>
+                  <td>
+                    {item.date
+                      ? new Date(`${item.date}T00:00:00`).toLocaleDateString(
+                          "en-GB",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          }
+                        )
+                      : "—"}
+                  </td>
+                  <td>{item.technician}</td>
+                  <td>
+                    <select
+                      className="maintenance-status-select"
+                      value={item.status}
+                      aria-label={`Update status for ${item.equipment}`}
+                      onChange={(event) =>
+                        handleStatusChange(item.id, event.target.value)
+                      }
+                    >
+                      <option value="Scheduled">Scheduled</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </td>
+                  <td>
+                    <div className="maintenance-row-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => handleEdit(item)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => handleDelete(item)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+
+            {!isLoading && filteredSchedules.length === 0 && (
+              <tr>
+                <td colSpan="7">No matching schedules found.</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-
-      <p className="maintenance-demo-note">
-        Sample schedules are for demonstration. Database integration will be
-        added in a later step.
-      </p>
     </section>
   );
 }

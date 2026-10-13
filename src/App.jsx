@@ -17,19 +17,16 @@ const initialStats = [
   { label: "Completed Jobs", value: "86", detail: "This month", icon: "✅" },
 ];
 
-const initialOrders = [
-  { id: "WO-1048", equipment: "Main Generator", location: "Central Library", priority: "High", status: "In Progress" },
-  { id: "WO-1047", equipment: "Air Conditioning Unit", location: "Faculty of Science", priority: "Medium", status: "Pending" },
-  { id: "WO-1046", equipment: "Water Pump", location: "Student Hostel", priority: "Low", status: "Completed" },
-  { id: "WO-1045", equipment: "Laboratory Microscope", location: "Teaching Laboratory", priority: "High", status: "Pending" },
-];
-
 function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [activePage, setActivePage] = useState("Overview");
+  
+const [selectedFaultForWorkOrder, setSelectedFaultForWorkOrder] =
+  useState(null);
+
   const [databaseStatus, setDatabaseStatus] = useState("Checking connection...");
 const [dashboardStats, setDashboardStats] = useState(initialStats);
 const [upcomingSchedules, setUpcomingSchedules] = useState([]);
@@ -229,9 +226,16 @@ useEffect(() => {
       ["under maintenance", "in maintenance", "maintenance"].includes(status)
     ).length;
 
-    const awaitingInspection = statuses.filter((status) =>
-      ["awaiting inspection", "inspection pending", "needs inspection"].includes(status)
-    ).length;
+    
+const awaitingInspection = statuses.filter((status) =>
+  [
+    "needs attention",
+    "awaiting inspection",
+    "inspection pending",
+    "needs inspection",
+  ].includes(status)
+).length;
+
 
     const percentage = statuses.length
       ? Math.round((operational / statuses.length) * 100)
@@ -563,22 +567,32 @@ useEffect(() => {
         </header>
 
         <section className="page-content">
-          {activePage === "Equipment" ? (
-            <Equipment />
-          ) : activePage === "Maintenance Schedule" ? (
-            <MaintenanceSchedule />
-          ) : activePage === "Fault Reports" ? (
-            <FaultReports />
-          ) : activePage === "Work Orders" ? (
-            <WorkOrders />
-          ) : activePage === "Spare Parts" ? (
-            <SpareParts />
-          ) : activePage === "Maintenance History" ? (
-            <MaintenanceHistory />
-          ) : activePage === "Reports" ? (
-            <Reports />
-          ) : (
-            <>
+         
+{activePage === "Equipment" ? (
+  <Equipment />
+) : activePage === "Maintenance Schedule" ? (
+  <MaintenanceSchedule />
+) : activePage === "Fault Reports" ? (
+  <FaultReports
+    onCreateWorkOrder={(fault) => {
+      setSelectedFaultForWorkOrder(fault);
+      setActivePage("Work Orders");
+    }}
+  />
+) : activePage === "Work Orders" ? (
+  <WorkOrders
+    selectedFault={selectedFaultForWorkOrder}
+    onClearSelectedFault={() => setSelectedFaultForWorkOrder(null)}
+  />
+) : activePage === "Spare Parts" ? (
+  <SpareParts />
+) : activePage === "Maintenance History" ? (
+  <MaintenanceHistory />
+) : activePage === "Reports" ? (
+  <Reports />
+) : (
+
+  <>
               <div className="welcome-row">
                 <div>
                   <p className="eyebrow">UNIVERSITY OF IBADAN</p>

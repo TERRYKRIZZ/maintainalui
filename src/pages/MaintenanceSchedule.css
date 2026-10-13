@@ -192,6 +192,38 @@ box-shadow: 0 0 0 3px #e85d001c;}
   color: #21834a;
 }
 
+
+/* Maintenance schedule status dropdown */
+.maintenance-table td select {
+  min-width: 110px;
+  padding: 9px 28px 9px 12px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #24334c;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.maintenance-table td select:hover {
+  border-color: #E85D00;
+}
+
+.maintenance-table td select:focus {
+  border-color: #E85D00;
+  box-shadow: 0 0 0 3px #e85d001c;
+}
+
+.maintenance-table td select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
 .maintenance-demo-note {
   margin: 16px 0;
   color: #8a96a8;
