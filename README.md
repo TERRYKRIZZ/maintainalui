@@ -1,16 +1,46 @@
-# React + Vite
+# 🛠️ MaintainalUI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+### Equipment Maintenance Scheduling System
 
-Currently, two official plugins are available:
+MaintainalUI is a web application project focused on equipment maintenance scheduling and facilities management. It was developed as a case study associated with the University of Ibadan.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+🔗 **Live Demo:** [maintainalui.vercel.app](https://maintainalui.vercel.app)
 
-## React Compiler
+## 📌 About the Project
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The project explores how a digital system can help organise maintenance activities, support equipment management, and make maintenance-related workflows easier to manage.
 
-## Expanding the ESLint configuration
+## ✨ Project Overview
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Equipment maintenance scheduling
+- Facilities management workflows
+- A web-based user interface
+- Project modules connected to Supabase, as indicated by the repository's development history
+
+## 🛠️ Technologies
+
+- React
+- JavaScript
+- CSS
+- Vite
+- Supabase
+
+## 🌐 Live Application
+
+Explore the deployed application:
+
+**[Open MaintainalUI](https://maintainalui.vercel.app)**
+
+## 🎯 Project Purpose
+
+MaintainalUI demonstrates practical work on a facilities management application, with a focus on organising maintenance processes through a web interface.
+
+## 👩‍💻 Author
+
+**TERRYKRIZZ**
+
+[GitHub Profile](https://github.com/TERRYKRIZZ)
+
+---
+
+*Thank you for visiting MaintainalUI!*
