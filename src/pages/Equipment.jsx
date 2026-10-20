@@ -21,37 +21,40 @@ function Equipment() {
   const [isSaving, setIsSaving] = useState(false);
   const submittingRef = useRef(false);
 
-  // Load real equipment records from Supabase.
-  useEffect(() => {
-    async function loadEquipment() {
-      try {
-        const { data, error } = await supabase
-          .from("equipment")
-          .select("*")
-          .order("created_at", { ascending: false });
+  
+  
+useEffect(() => {
+  async function loadEquipment() {
+    try {
+      const { data, error } = await supabase
+        .from("equipment")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        setEquipment(
-          (data || []).map((item) => ({
-            id: item.id,
-            assetId: item.asset_tag || "",
-            name: item.name || "",
-            category: item.category || "",
-            location: item.location || "",
-            condition: item.status || "Operational",
-          }))
-        );
-      } catch (error) {
-        console.error("Failed to load equipment:", error);
-        alert("Could not load equipment: " + error.message);
-      } finally {
-        setIsLoading(false);
-      }
+      setEquipment(
+        (data || []).map((item) => ({
+          id: item.id,
+          assetId: item.asset_tag || "",
+          name: item.name || "",
+          category: item.category || "",
+          location: item.location || "",
+          condition: item.status || "Operational",
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load equipment:", error);
+      alert("Could not load equipment: " + error.message);
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    loadEquipment();
-  }, []);
+  loadEquipment();
+}, []);
+
+
 
   const filteredEquipment = equipment.filter((item) => {
     const query = search.toLowerCase();
@@ -178,37 +181,36 @@ function Equipment() {
   };
 
   // Delete equipment after confirmation.
-  const handleDelete = async (item) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${item.name} (${item.assetId})?`
-    );
+ 
 
-    if (!confirmed) return;
+const handleDelete = async (item) => {
+  const confirmed = window.confirm(
+    `Are you sure you want to delete ${item.name} (${item.assetId})?`
+  );
 
-    const { error } = await supabase
-      .from("equipment")
-      .delete()
-      .eq("id", item.id);
+  if (!confirmed) return;
 
-    if (error) {
-      alert(
-        "Could not delete equipment: " +
-          error.message +
-          "\n\nCheck whether related maintenance records or database permissions prevent deletion."
-      );
-      return;
-    }
+  const { error } = await supabase
+    .from("equipment")
+    .delete()
+    .eq("id", item.id);
 
-    setEquipment((current) =>
-      current.filter((record) => record.id !== item.id)
-    );
+  if (error) {
+    alert("Could not delete equipment: " + error.message);
+    return;
+  }
 
-    if (editingId === item.id) {
-      resetForm();
-    }
+  setEquipment((current) =>
+    current.filter((record) => record.id !== item.id)
+  );
 
-    alert("Equipment deleted successfully.");
-  };
+  if (editingId === item.id) {
+    resetForm();
+  }
+
+  alert("Equipment deleted successfully.");
+};
+
 
   return (
     <section className="equipment-page">

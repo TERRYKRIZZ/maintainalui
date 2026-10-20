@@ -17,8 +17,47 @@ const initialStats = [
   { label: "Completed Jobs", value: "86", detail: "This month", icon: "✅" },
 ];
 
+const demoEquipment = [
+  {
+    id: 1,
+    name: "Air Conditioning Unit",
+    location: "Main Library",
+    status: "Operational",
+  },
+  {
+    id: 2,
+    name: "Backup Generator",
+    location: "Engineering Block",
+    status: "Under Maintenance",
+  },
+  {
+    id: 3,
+    name: "Water Pump",
+    location: "Student Hostel",
+    status: "Needs Attention",
+  },
+];
+
+const demoWorkOrders = [
+  {
+    id: "WO-DEMO-001",
+    equipment: "Backup Generator",
+    location: "Engineering Block",
+    priority: "High",
+    status: "In Progress",
+  },
+  {
+    id: "WO-DEMO-002",
+    equipment: "Water Pump",
+    location: "Student Hostel",
+    priority: "Medium",
+    status: "Open",
+  },
+];
+
 function App() {
   const [session, setSession] = useState(null);
+  const [demoMode, setDemoMode] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -424,7 +463,7 @@ useEffect(() => {
     { label: "Reports", icon: "▥" },
   ];
 
-  if (authLoading) {
+  if (authLoading && !demoMode) {
     return (
       <div className="login-page">
         <div className="login-card">
@@ -435,8 +474,8 @@ useEffect(() => {
     );
   }
 
-  if (!session) {
-    return (
+if (!session && !demoMode) {
+  return (
       <div className="login-page">
         <form className="login-card" onSubmit={handleLogin}>
           <h1>MaintainalUI</h1>
@@ -510,15 +549,17 @@ useEffect(() => {
               <strong>Facilities Manager</strong>
               <span>Administrator</span>
             </div>
-            <button
-              type="button"
-              className="profile-menu"
-              onClick={handleLogout}
-              title="Log out"
-              aria-label="Log out"
-            >
-              Logout
-            </button>
+            {!demoMode && (
+  <button
+    type="button"
+    className="profile-menu"
+    onClick={handleLogout}
+    title="Log out"
+    aria-label="Log out"
+  >
+    Logout
+  </button>
+)}
           </div>
         </div>
       </aside>
@@ -544,23 +585,25 @@ useEffect(() => {
   ♧<span className="notification-dot" />
 </button>
 
-<button
-  type="button"
-  onClick={handleLogout}
-  aria-label="Log out"
-  style={{
-    border: "none",
-    borderRadius: "8px",
-    padding: "9px 12px",
-    background: "#f56600",
-    color: "#ffffff",
-    fontSize: "12px",
-    fontWeight: 700,
-    cursor: "pointer",
-  }}
->
-  Logout
-</button>
+{!demoMode && (
+  <button
+    type="button"
+    onClick={handleLogout}
+    aria-label="Log out"
+    style={{
+      border: "none",
+      borderRadius: "8px",
+      padding: "9px 12px",
+      background: "#f56600",
+      color: "#ffffff",
+      fontSize: "12px",
+      fontWeight: 700,
+      cursor: "pointer",
+    }}
+  >
+    Logout
+  </button>
+)}
 
 <div className="top-avatar">FM</div>
           </div>
